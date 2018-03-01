@@ -1,0 +1,369 @@
+---
+title: "EM Algorithm and Simulation"
+author:  Surya Teja Eada and Kristen Sandberg
+
+Date: 03/01/2018
+output: 
+  pdf_document:
+    latex_engine: xelatex
+    pandoc_args: [
+      "--number-sections",
+      "--number-offset=1"
+    ]
+   
+
+abstract: This project has two components. Firstly, we derive the updating rules in the construction of the EM algorithm in application to maximum likelihood estimation in finite mixture regression models. Secondly, we apply the rejection sampling algorithm to simulate from few complicated density functions that are in a way similar to a mixture of Gamma densities and Beta densities.
+
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+source("utils_template.R")
+need.packages("ggplot2")
+
+need.packages <- function(pkg, ...)
+{
+  new.pkg <- pkg[! (pkg %in% installed.packages()[, "Package"])]
+  if (length(new.pkg))
+    install.packages(new.pkg, repos = "https://cloud.r-project.org")
+  foo <- function(a, ...) suppressMessages(require(a, ...))
+  sapply(pkg, foo, character.only = TRUE)
+  invisible(NULL)
+}
+
+pkgs <- c("knitr")
+need.packages(pkgs)
+```
+
+# Expectation - Maximization {#sec:Q1}
+
+In this question, we will derive the updating rules in the given algorithm based on the construction of an EM algorithm for a finite mixture regression model.  Suppose the density of $y_i$ (conditional on $\mathbf{x}_i$), is given by $f(y_i | \mathbf{x}_i,\Psi) = \sum_{j=1}^{m} \pi_j \phi(y_i;\mathbf{x}_i^{T}\boldsymbol{\beta}_j,\sigma^2)$, for $i=1,\ldots,n$, where $\pi_j$s are called mixing proportions, $\boldsymbol{\beta}_j$ is the regression coefficient vector for the $j$th group, $\phi(\cdot;\mu,\sigma^2)$ denotes the density function of $N(\mu,\sigma^2)$, and $\Psi = (\pi_1,\boldsymbol{\beta}_1,\ldots,\pi_m,\boldsymbol{\beta}_m,\sigma)^T$ collects all the unknown parameters.  Let $\hat{\Psi}_{\text{mle}} = \arg\max_{\Psi}{\sum_{i=1}^n \log{\{\sum_{j=1}^m \pi_j\phi(y_i;\mathbf{x}_i^{T}\boldsymbol{\beta}_j,\sigma_j^2)\}}}$ and 
+$$
+z_{ij} = \begin{cases} 
+      1 & \text{if }i\text{th observation is from }j\text{th component}; \\
+      0 & \text{otherwise}.
+   \end{cases}
+$$
+
+## E-Step
+In the E-Step of the EM algorithm, we compute the conditional epectation of $l_{n}^{c}(\Psi)$, where $l_{n}^{c}(\Psi)$ is given in equation (\ref{eq:q1_l}).
+\begin{equation}  
+l_{n}^{c}(\Psi) = \sum_{i=1}^{n} \sum_{j=1}^{m} z_{ij} \log{\{\pi_j \phi(y_i-\mathbf{x}_{i}^{T}\boldsymbol{\beta}_j;0;\sigma^2)\}}
+\label{eq:q1_l} \end{equation}
+Observe, 
+$$
+\begin{aligned}
+Q(\Psi | \Psi^{(k)}) &= \mathbb{E}_{z} \{ l_{n}^{c}(\Psi)\} \\
+&= \mathbb{E}_{z} \left[ \sum_{i=1}^{n} \sum_{j=1}^{m} z_{ij} \log{\{\pi_j \phi(y_i-\mathbf{x}_{i}^{T}\boldsymbol{\beta}_j;0;\sigma^2)\}} \right] \\
+&= \sum_{i=1}^{n} \sum_{j=1}^{m}\log{\{\pi_j \phi(y_i-\mathbf{x}_{i}^{T}\boldsymbol{\beta}_j;0;\sigma^2)\}} \mathbb{E}_{z} \left[ z_{ij} | y_i,\mathbf{x}_i;\Psi^{(k)}\right] \\
+&= \sum_{i=1}^{n} \sum_{j=1}^{m}\log{\{\pi_j \phi(y_i-\mathbf{x}_{i}^{T}\boldsymbol{\beta}_j;0;\sigma^2)\}} \sum_{i=1}^{n} \sum_{j=1}^{m} p_{ij}^{(k+1)} \\
+&= \sum_{i=1}^{n} \sum_{j=1}^{m}p_{ij}^{(k+1)}\log{\{\pi_j \phi(y_i-\mathbf{x}_{i}^{T}\boldsymbol{\beta}_j;0;\sigma^2)\}}.   
+\end{aligned}
+$$
+Here $p_{ij}$ represents the probability that the observation belongs to component $j$.  Since this is a finite mixture of normal distributions, we first consider the probability under model $j$, which is $\pi_j \phi(y_i-\mathbf{x}_i^{T}\boldsymbol{\beta}_j^{(k)};0,\sigma^2)$.  This is the normal density multiplied by the mixing proportion.  We then normalize this to sum to one by dividing this by the summation of probabilities over all components $j$.  Thus, we have 
+\begin{equation}
+p_{ij} = \dfrac{\pi_j \phi(y_i-\mathbf{x}_i^{T}\boldsymbol{\beta}_j^{(k)};0,\sigma^2)}{\sum_{j=1}^m \pi_j \phi(y_i-\mathbf{x}_i^{T}\boldsymbol{\beta}_j^{(k)};0,\sigma^2)}.
+\label{eq:q1_pij} \end{equation}
+Therefore, $\sum_{j=1}^m p_{ij}= 1$.
+
+## M-Step 
+For the M-Step, we want to maximize $Q(\Psi | \Psi^{(k)})$ to obtain $(\boldsymbol{\beta}^{(k+1)},\sigma^{2(k+1)})$, so we will compute the following partial derivatives, set them equal to zero, and solve for each variable individually.
+
+## M-Step (2.a) Compute $\pi_j^{(k+1)}$
+First, we will show that $\pi_j^{(k+1)} = \dfrac{\sum_{i=1}^{n} p_{ij}^{(k+1)}}{n}$.  Recall that the mixing proportions, $\pi_1,\ldots,\pi_m$ must satisfy $\pi_1 + \ldots \pi_m = 1$.  Therefore, we will find the maximum by finding a solution for $\mathcal{L}^{'}(\pi_1,\ldots,\pi_m)=0$ where $\mathcal{L}(\pi_1,\ldots,\pi_m) = \sum_{i=1}^{n} \sum_{j=1}^{m} z_{ij} \log{\{\pi_j \phi(y_i-\mathbf{x}_{i}^{T}\boldsymbol{\beta}_j;0;\sigma^2)\}} - \lambda\left[\sum_{j=1}^{m} \pi_{j} - 1 \right]$ with $\lambda$ a Lagrange multiplier.  Observe, 
+
+\begin{equation}
+\dfrac{\partial\mathcal{L}}{\partial \pi_j} = \sum_{i=1}^{n} \sum_{j=1}^{m} p_{ij}^{(k+1)}\dfrac{1}{\pi_{j}^{(k+1)}} - \lambda.
+\label{eq:q1_l_prime} \end{equation}
+
+Now recall that $\sum_{j=1}^{m} p_{ij} = 1$ and $\sum_{j=1}^{m} \pi_j = 1$, so now equation (\ref{eq:q1_l_prime}) becomes 
+
+\begin{equation}
+\dfrac{\partial\mathcal{L}}{\partial \pi_{j}^{(k+1)}} = n - \lambda.
+\label{eq:q1_l_prime2} \end{equation}
+
+We set equation (\ref{eq:q1_l_prime2}) equal to zero, subtract $\lambda$ from both sides, and find that $\lambda = n$.  Thus, from equation (\ref{eq:q1_l_prime}) we have 
+
+\begin{equation}
+\dfrac{\partial\mathcal{L}}{\partial \pi_{j}^{(k+1)}} = \sum_{i=1}^{n} \sum_{j=1}^{m} p_{ij}^{(k+1)}\dfrac{1}{\pi_{j}^{(k+1)}} - n.
+\label{eq:q1_l_prime3} \end{equation}
+
+We set equation (\ref{eq:q1_l_prime3}) equal to zero, subtract $n$ from both sides, and we have 
+$$
+\begin{aligned}
+n = \sum_{i=1}^{n} \sum_{j=1}^{m} p_{ij}^{(k+1)}\dfrac{1}{\pi_{j}^{(k+1)}},
+\end{aligned}
+$$
+which implies that 
+\begin{equation}
+\pi_{j}^{(k+1)} = \dfrac{\sum_{i=1}^{n} p_{ij}^{(k+1)}}{n}.
+\label{eq:q1_l_prime5} \end{equation}
+
+## M-Step (2.b) Compute $\boldsymbol{\beta}_j^{(k+1)}$
+Second, we will show that $\boldsymbol{\beta}_j^{(k+1)} = \left(\sum_{i=1}^{n} \mathbf{x}_i \mathbf{x}_i^{T}p_{ij}^{(k+1)}\right)^{-1}\left(\sum_{i=1}^{n} \mathbf{x}_i p_{ij}^{(k+1)}y_i\right)$ for $j=1,\ldots,m$.
+
+First, we will rewrite $Q(\Psi|\Psi^{(k)})$ as follows:
+$$
+\begin{aligned}
+Q(\Psi|\Psi^{(k)}) &= \sum_{i=1}^{n}\sum_{j=1}^{m} p_{ij}^{(k+1)}\{\log{\pi_j} + \log{\left[\dfrac{1}{\sqrt{2\pi\sigma^2}}\exp{\{\dfrac{-1}{2\sigma^2}(y_i-\mathbf{x}_i^{T}\boldsymbol{\beta}_j^{(k+1)})^{T}(y_i-\mathbf{x}_i^{T}\boldsymbol{\beta}_j^{(k+1)}) \}} \right]} \} \\
+&= \sum_{i=1}^{n}\sum_{j=1}^{m} p_{ij}^{(k+1)}\{\log{\pi_j} + \log{\left[\dfrac{1}{\sqrt{2\pi\sigma^2}}\exp{\{\dfrac{-1}{2\sigma^2}(y_i^T-(\mathbf{x}_i^{T}\boldsymbol{\beta}_j^{(k+1)})^{T})(y_i-\mathbf{x}_i^{T}\boldsymbol{\beta}_j^{(k+1)}) \}} \right]} \} \\
+&= \sum_{i=1}^{n}\sum_{j=1}^{m} p_{ij}^{(k+1)}\{\log{\pi_j} + \log{\left[\dfrac{1}{\sqrt{2\pi\sigma^2}}\exp{\{\dfrac{-1}{2\sigma^2}(y_i^T-(\boldsymbol{\beta}_j^{(k+1)})^{T}\mathbf{x}_i)(y_i-\mathbf{x}_i^{T}\boldsymbol{\beta}_j^{(k+1)}) \}} \right]} \} \\
+&= \sum_{i=1}^{n}\sum_{j=1}^{m} p_{ij}^{(k+1)}\{\log{\pi_j} + \log{\left[\dfrac{1}{\sqrt{2\pi\sigma^2}}\exp{\{\dfrac{-1}{2\sigma^2}(y_i^Ty_i-(\boldsymbol{\beta}_j^{(k+1)})^{T}\mathbf{x}_iy_i - y_i^T\mathbf{x}_i^T\boldsymbol{\beta}_j^{(k+1)}+(\boldsymbol{\beta}_j^{(k+1)})^T\mathbf{x}_i\mathbf{x}_i^{T}\boldsymbol{\beta}_j^{(k+1)}) \}} \right]} \} 
+\end{aligned}
+$$
+Now, we note that $y_i$ is not a vector, so $y_i^T = y_i$.  Also, we will need to know 
+$$
+\begin{aligned}
+\dfrac{\partial \left(\boldsymbol{\beta}_j^{(k+1)}\mathbf{x}_iy_i\right)}{\partial \boldsymbol{\beta}_j^{(k+1)}} &= \dfrac{\partial \left((\mathbf{x}_iy_i)^T\boldsymbol{\beta}_j^{(k+1)}\right)}{\partial \boldsymbol{\beta}_j^{(k+1)}} = (\mathbf{x}_iy_i)^T = y_i^T\mathbf{x}_i^T = y_i\mathbf{x}_i^T,
+\end{aligned}
+$$
+and 
+$$
+\begin{aligned}
+\dfrac{\partial \left(\left(\boldsymbol{\beta}_j^{(k+1)}\right)^T\mathbf{x}_i\mathbf{x}_i^T\boldsymbol{\beta}_j^{(k+1)}\right)}{\partial\boldsymbol{\beta}_j^{(k+1)}} 
+&= \left(\boldsymbol{\beta}_j^{(k+1)}\right)^T \left[\mathbf{x}_i\mathbf{x}_i^T + (\mathbf{x}_i\mathbf{x}_i^T)^T \right] = \left(\boldsymbol{\beta}_j^{(k+1)}\right)^T \left[\mathbf{x}_i\mathbf{x}_i^T + \mathbf{x}_i\mathbf{x}_i^T\right] = 2\left(\boldsymbol{\beta}_j^{(k+1)}\right)^T\mathbf{x}_i\mathbf{x}_i^T
+\end{aligned}
+$$
+Thus, the partial derivative of $Q(\Psi|\Psi^{(k)})$ with respect to $\boldsymbol{\beta}_j^{(k+1)}$ is:
+$$
+\begin{aligned}
+\dfrac{\partial Q(\Psi|\Psi^{(k)})}{\partial \boldsymbol{\beta}_j^{(k+1)}}
+&= \sum_{i=1}^n\sum_{j+1}^m p_{ij}^{(k+1)}\left(\dfrac{\sqrt{2\pi\sigma^2}}{\exp{\{\dfrac{-1}{2\sigma^2}(y_i-\mathbf{x}_i^{T}\boldsymbol{\beta}_j^{(k+1)})^{T}(y_i-\mathbf{x}_i^{T}\boldsymbol{\beta}_j^{(k+1)}) \}}}\right)\Big(\dfrac{1}{\sqrt{2\pi\sigma^2}}\Big( \dfrac{-1}{2\sigma^2}\Big(0 - y_i\mathbf{x}_i^T - y_i\mathbf{x}_i^T \\
+&\phantom{00000000}+ 2\left(\boldsymbol{\beta}_j^{(k+1)}\right)^T\mathbf{x}_i\mathbf{x}_i^T\Big)\Big)
+\exp{\{\dfrac{-1}{2\sigma^2}(y_i-\mathbf{x}_i^{T}\boldsymbol{\beta}_j^{(k+1)})^{T}(y_i-\mathbf{x}_i^{T}\boldsymbol{\beta}_j^{(k+1)}) \}}\Big) \\
+&= \sum_{i=1}^n\sum_{j+1}^m p_{ij}^{(k+1)}\left(\dfrac{-1}{2\sigma^2}\right)\left(-2y_i\mathbf{x}_i^T + 2\left(\boldsymbol{\beta}_j^{(k+1)}\right)^T\mathbf{x}_i\mathbf{x}_i^T\right) \\
+&= \sum_{i=1}^n\sum_{j+1}^m p_{ij}^{(k+1)}\left(\dfrac{1}{\sigma^2}\right)\left(y_i\mathbf{x}_i^T - \left(\boldsymbol{\beta}_j^{(k+1)}\right)^T\mathbf{x}_i\mathbf{x}_i^T\right).
+\end{aligned}
+$$
+We set this partial derivative equal to 0, multiply both sides by $\sigma^2$, and add $\left(\sum_{i=1}^n\sum_{j+1}^m p_{ij}^{(k+1)} \left(\boldsymbol{\beta}_j^{(k+1)}\right)^T\mathbf{x}_i\mathbf{x}_i^T\right)$ to both sides to obtain:
+$$
+\begin{aligned}
+\sum_{i=1}^n\sum_{j+1}^m p_{ij}^{(k+1)} \left(\boldsymbol{\beta}_j^{(k+1)}\right)^T\mathbf{x}_i\mathbf{x}_i^T = \sum_{i=1}^n\sum_{j+1}^m p_{ij}^{(k+1)} y_i\mathbf{x}_i^T
+\end{aligned}
+$$
+Since $\boldsymbol{\beta}_j^{(k+1)}$ does not depend on $i$ and $p_{ij}^{(k+1)}$ is a scalar, we can move $\left(\boldsymbol{\beta}_j^{(k+1)}\right)^T$ outside of the summation, and we have:
+$$
+\begin{aligned}
+\left(\boldsymbol{\beta}_j^{(k+1)}\right)^T \sum_{i=1}^n p_{ij}^{(k+1)} \mathbf{x}_i\mathbf{x}_i^T = \sum_{i=1}^n p_{ij}^{(k+1)} y_i\mathbf{x}_i^T,
+\end{aligned}
+$$
+for $j=1,\ldots,m$.  Now we right multiply by $\left( \sum_{i=1}^n p_{ij}^{(k+1)} \mathbf{x}_i\mathbf{x}_i^T \right)^{-1}$ to obtain:
+$$
+\begin{aligned}
+\left(\boldsymbol{\beta}_j^{(k+1)}\right)^T &= \left(\sum_{i=1}^n p_{ij}^{(k+1)} y_i\mathbf{x}_i^T\right)\left( \sum_{i=1}^n p_{ij}^{(k+1)} \mathbf{x}_i\mathbf{x}_i^T \right)^{-1}.
+\end{aligned}
+$$
+Now, we would like the formula for $\boldsymbol{\beta}_j^{(k+1)}$, so we will take the transpose of both sides are we have:
+$$
+\begin{aligned}
+\boldsymbol{\beta}_j^{(k+1)} &= \left[\left(\sum_{i=1}^n p_{ij}^{(k+1)} y_i\mathbf{x}_i^T\right)\left( \sum_{i=1}^n p_{ij}^{(k+1)} \mathbf{x}_i\mathbf{x}_i^T \right)^{-1}\right]^{T} \\
+&= \left[\left( \sum_{i=1}^n p_{ij}^{(k+1)} \mathbf{x}_i\mathbf{x}_i^T \right)^{-1}\right]^{T}\left[\left(\sum_{i=1}^n p_{ij}^{(k+1)} y_i\mathbf{x}_i^T\right) \right]^{T} \\
+&= \left[\left( \sum_{i=1}^n p_{ij}^{(k+1)} \mathbf{x}_i\mathbf{x}_i^T \right)^{T}\right]^{-1}\left[\sum_{i=1}^n \left(p_{ij}^{(k+1)} y_i\mathbf{x}_i^T\right)^{T} \right]\\
+&= \left[\sum_{i=1}^n \left(p_{ij}^{(k+1)} \mathbf{x}_i\mathbf{x}_i^T \right)^{T}\right]^{-1}\left[\sum_{i=1}^n \mathbf{x}_i\left(p_{ij}^{(k+1)}\right)^Ty_i^T \right]\\
+&= \left[\sum_{i=1}^n\mathbf{x}_i\mathbf{x}_i^Tp_{ij}^{(k+1)} \right]^{-1}\left[\sum_{i=1}^n \mathbf{x}_ip_{ij}^{(k+1)}y_i \right]
+\end{aligned}
+$$
+for $j=1,\ldots,m$.
+
+## M-Step (2.c) Compute $\sigma^{2(k+1)}$
+Third, we will show that $\sigma^{2(k+1)} = \dfrac{\sum_{j=1}^{m}\sum_{i=1}^{n}p_{ij}^{(k+1)}(y_i - \mathbf{x}_i^{T}\boldsymbol{\beta}_j^{(k+1)})^2}{n}$.
+
+Let $\phi(\cdot;\mu,\sigma^2)$ denote the density function of $N(\mu,\sigma^2)$.  Thus, $\phi(y_i-\mathbf{x}_i^{T}\boldsymbol{\beta}_j^{k}) = \dfrac{1}{\sqrt{2\pi\sigma^2}}\exp{\{\dfrac{-1}{2\sigma^2}\left(y_i-\mathbf{x}_i^{T}\boldsymbol{\beta}_j^{k} - 0\right)^2 \}}$.  Therefore, we have
+$$
+\begin{aligned}
+Q(\Psi | \Psi^{(k)}) &= \sum_{i=1}^{n} \sum_{j=1}^{m}p_{ij}^{(k+1)}\log{\{\pi_j \dfrac{1}{\sqrt{2\pi\sigma^2}}\exp{\{\dfrac{-1}{2\sigma^2}\left(y_i-\mathbf{x}_i^{T}\boldsymbol{\beta}_j^{k} - 0\right)^2 \}}\}}.
+\end{aligned}
+$$
+When we take the partial derivative of $Q(\Psi | \Psi^{(k)})$ with respect to $\sigma^{2(k+1)}$, we have
+$$
+\begin{aligned}
+\dfrac{\partial Q}{\partial \sigma^{2(k+1)}} &= \sum_{i=1}^{n} \sum_{j=1}^{m}p_{ij}^{(k+1)} \left(\dfrac{\sqrt{2\pi\sigma^{2(k+1)}}}{\exp{\left[\dfrac{-1}{2\sigma^{2(k+1)}} (y_i - \mathbf{x}_i^{T}\boldsymbol{\beta}_j^{(k)})^2 \right]}} \right)\Big(\dfrac{-\pi}{(2\pi\sigma^{2(k+1)})^{(3/2)}} \exp{\left[\dfrac{-1}{2\sigma^{2(k+1)}} (y_i - \mathbf{x}_i^{T}\boldsymbol{\beta}_j^{(k)})^2 \right]} \\
+&+ \dfrac{1}{\sqrt{2\pi\sigma^{2(k+1)}}}\left(\dfrac{1}{2(\sigma^{2(k+1)})^2}(y_i - \mathbf{x}_i^{T}\boldsymbol{\beta}_j^{(k)})^2 \right)\exp{\left[\dfrac{-1}{2\sigma^{2(k+1)}} (y_i - \mathbf{x}_i^{T}\boldsymbol{\beta}_j^{(k)})^2 \right]}\Big) \\
+&= \sum_{i=1}^{n} \sum_{j=1}^{m}p_{ij}^{(k+1)} \left(\dfrac{-\pi}{2\pi\sigma^{2(k+1)}} + \dfrac{1}{2(\sigma^{2(k+1)})^2}(y_i - \mathbf{x}_i^{T}\boldsymbol{\beta}_j^{(k)})^2\right) \\
+&= \sum_{i=1}^{n} \sum_{j=1}^{m}p_{ij}^{(k+1)} \left(\dfrac{-1}{2\pi\sigma^{2(k+1)}} + \dfrac{1}{2(\sigma^{2(k+1)})^2}(y_i - \mathbf{x}_i^{T}\boldsymbol{\beta}_j^{(k)})^2\right).
+\end{aligned}
+$$
+Now, we can set this partial derivative equal to zero and solve for $\sigma^{2(k+1)}$.  Thus, we have
+$$
+\begin{aligned}
+0 &= \dfrac{1}{2\sigma^{2(k+1)}}\sum_{i=1}^{n} \sum_{j=1}^{m}p_{ij}^{(k+1)} \left(-1 + \dfrac{1}{\sigma^{2(k+1)}}(y_i - \mathbf{x}_i^{T}\boldsymbol{\beta}_j^{(k)})^2\right)
+\end{aligned}
+$$
+We can multiply both sides by $2\sigma^{2(k+1)}$ and add $\sum_{i=1}^{n} \sum_{j=1}^{m}p_{ij}^{(k+1)}$ to both sides.  Therefore, $\sum_{i=1}^{n} \sum_{j=1}^{m}p_{ij}^{(k+1)} = \dfrac{1}{\sigma^{2(k+1)}}\sum_{i=1}^{n} \sum_{j=1}^{m}p_{ij}^{(k+1)}(y_i - \mathbf{x}_i^{T}\boldsymbol{\beta}_j^{(k)})^2$.  Lastly, we multiply both sides by $\sigma^2$ and divide by $\sum_{i=1}^{n} \sum_{j=1}^{m}p_{ij}^{(k+1)}$.  This gives us
+$$
+\begin{aligned}
+\sigma^{2(k+1)} &= \dfrac{\sum_{i=1}^{n} \sum_{j=1}^{m}p_{ij}^{(k+1)}(y_i - \mathbf{x}_i^{T}\boldsymbol{\beta}_j^{(k)})^2}{\sum_{i=1}^{n} \sum_{j=1}^{m}p_{ij}^{(k+1)}}.
+\end{aligned}
+$$
+Again, since $\sum_{i=1}^{n} \sum_{j=1}^{m}p_{ij}^{(k+1)} = n$, we can express this as
+$$
+\begin{aligned}
+\sigma^{2(k+1)} &= \dfrac{\sum_{i=1}^{n} \sum_{j=1}^{m}p_{ij}^{(k+1)}(y_i - \mathbf{x}_i^{T}\boldsymbol{\beta}_j^{(k)})^2}{n}.
+\end{aligned}
+$$
+
+\newpage
+
+# Using Gamma Mixture Model in Rejection Sampling {#sec:Q2}
+
+In this question, we want to create a procedure that simulates observations from a complex density function $f(x)$, as given in equation (\ref{eq:f}). For this task, we utilize the rejection sampling method with the instrumental density function $g(x)$, as given in (\ref{eq:g}). The idea is to simulate from $g(x)$, which will be observed to be a mixture of gamma density functions and then utilize the rejection sampling method. 
+
+\begin{equation} f(x)   \propto \sqrt{(4 + x)} x^{\theta - 1} e^{-x}  \label{eq:f} \end{equation} 
+\begin{equation}  g(x)   \propto (2 x^{\theta - 1} + x^{\theta - \frac{1}{2}}) e^{-x} \label{eq:g} \end{equation}
+
+
+
+First, we try to find the value of constant C in the density function $g(x)$.
+
+$$ g(x) = C*(2 x^{\theta - 1} + x^{\theta - \frac{1}{2}}) e^{-x} $$
+Since $g(x)$ is a density function, its integral over all values of x will result to a constant value "1". This implies:
+
+
+\begin{align*} \int_{0}^{\infty} g(x) dx &= 1 \\ 
+\int_{0}^{\infty} C*(2 x^{\theta - 1} + x^{\theta - \frac{1}{2}}) e^{-x} dx &= 1 \\
+C \Big[ \int_{0}^{\infty}  2 x^{\theta - 1} e^{-x} dx +  \int_{0}^{\infty} x^{\theta - \frac{1}{2}} e^{-x} dx \Big] &= 1 
+\end{align*}
+
+\begin{equation}
+C \Big[  2 \Gamma(\theta) \int_{0}^{\infty} \frac{x^{\theta - 1} e^{-x}}{\Gamma(\theta)} dx + \Gamma(\theta + \frac{1}{2}) \int_{0}^{\infty} \frac{x^{(\theta + \frac{1}{2}) - 1} e^{-x}}{\Gamma(\theta + \frac{1}{2})} dx \Big] = 1 
+\label{eq:split}
+\end{equation}
+
+It can be observed that the above integral in equation (\ref{eq:split}) is a mixture of two gamma density integral functions, namely $\Gamma(rate = 1, shape = \theta)$ and $\Gamma(rate = 1, shape = \theta + \frac{1}{2})$. Integrals of gamma density functions is equal to "1", results in the following value for C.
+
+\begin{gather*} 
+C \Big[  2 \Gamma(\theta) \int_{0}^{\infty} \frac{x^{\theta - 1} e^{-x}}{\Gamma(\theta)} dx + \Gamma(\theta + \frac{1}{2}) \int_{0}^{\infty} \frac{x^{(\theta + \frac{1}{2}) - 1} e^{-x}}{\Gamma(\theta + \frac{1}{2})} dx \Big] = 1  \\
+C \Big[ 2 \Gamma(\theta) + \Gamma(\theta + \frac{1}{2}) \Big] = 1 \\ 
+C = \Big[ \frac{1}{2 \Gamma(\theta) + \Gamma(\theta + \frac{1}{2})} \Big] \\
+\end{gather*}
+
+So, the density function $g(x)$ is given as follows:
+\begin{gather*}
+g(x) =  \frac{1}{2 \Gamma(\theta) + \Gamma(\theta + \frac{1}{2})} (2 x^{\theta - 1} + x^{\theta - \frac{1}{2}}) e^{-x} \\
+g(x) =  \frac{2 \Gamma(\theta)}{2 \Gamma(\theta) + \Gamma(\theta + \frac{1}{2})} \Big( \frac{x^{\theta - 1} e^{-x}}{\Gamma(\theta)} \Big) +  \frac{\Gamma(\theta + \frac{1}{2})}{2 \Gamma(\theta) + \Gamma(\theta + \frac{1}{2})} \Big( \frac{x^{(\theta + \frac{1}{2}) - 1} e^{-x}}{\Gamma(\theta + \frac{1}{2})} \Big) 
+\end{gather*}
+
+We observe that $g(x)$ is a mixture density function of two gamma densities, $\Gamma(rate = 1, shape = \theta)$ and $\Gamma(rate = 1, shape = \theta + \frac{1}{2})$ with weights $\alpha_{1} = \frac{2 \Gamma(\theta)}{2 \Gamma(\theta) + \Gamma(\theta + \frac{1}{2})}$, $\alpha_{2} = \frac{\Gamma(\theta + \frac{1}{2})}{2 \Gamma(\theta) + \Gamma(\theta + \frac{1}{2})}$ $s.t.$
+
+$$ \alpha_{1} + \alpha_{2}  = 1  $$
+
+## Simulation from 'g(x)' density
+
+In order to simulate samples from $g(x)$ mixture density, we need to sample from $\Gamma(rate = 1, shape = \theta)$ and $\Gamma(rate = 1, shape = \theta + \frac{1}{2})$ with different probabilities. We also simulate 10000 from this mixutre $g(x)$ density when theta = 2.
+
+```{r kernel_fig, echo = TRUE, fig.cap = "\\label{fig:kernel_fig} Kernel Density Estimation and True Density of $g(x)$ density function", fig.width = 8, fig.pos = 'htb'}
+## simulating using theta = 2 values 
+## alpha in this code refers to probability that describes which distribution 
+## among the mixture does an observation belong to and not prob of acceptance
+
+simulate_g <- function(sample_size, theta)  {
+  alpha_0 = 2*gamma(theta)/(2*gamma(theta) + gamma(theta + (1/2)))
+  indicator = rbinom(sample_size, 1, alpha_0)
+  simulate_g = numeric(sample_size)
+ for (i in 1:sample_size) {
+  if (indicator[i] == 1) {
+   simulate_g[i] <- rgamma(1, shape = theta, rate = 1)
+  } 
+   else { simulate_g[i] <- rgamma(1, shape = theta + (1/2), rate = 1)}
+ }
+  return(simulate_g)
+}
+
+sample_size_sol <- 10000
+theta_sol <- 2
+g_sample <- simulate_g(sample_size_sol, theta_sol)
+alpha = 2*gamma(theta_sol)/(2*gamma(theta_sol) + gamma(theta_sol + (1/2)))
+
+
+
+plot(density(g_sample), col = "red")
+curve(alpha*dgamma(x,shape = 2, rate = 1) + (1-alpha)*dgamma(x, shape = 5/2, rate = 1), 
+      xlim = c(0, max(g_sample)), add = TRUE, col = "green")
+legend("topright", legend = c("Kernel Density", "True Density"), col = c("red","green"),
+       lty = c(1,1))
+## source("Simulate_Gamma_Mixture.R")
+## source("g_Kernel_Density_Plot.R")
+```
+
+The kernel density is a good approximation of the true density when 10000 sample points have been simulated from $g(x)$, when $\theta = 2$ is utilized and this can be observed from Figure (\ref{fig:kernel_fig}). 
+
+\newpage
+
+## Utilizing Rejection Sampling to sample from 'f(x)' density
+
+Our ultimate goal is to sample from $f(x)$, a slightly complicated density function. We use rejection sampling for this purpose with instrumental density as $g(x)$. Firstly, we show that $f(x)$ is proportional to $q(x)$ which is less than or equal to $g(x)$
+
+\begin{align*}
+f(x) &\propto \sqrt{(4 + x)} x^{\theta - 1} e^{-x} \\ 
+Let \ q(x) &= \sqrt{(4 + x)} x^{\theta - 1} e^{-x} \\
+q(x) &\le (\sqrt{4} + \sqrt{x}) x^{\theta - 1} e^{-x} \\
+q(x) &\le (2 x^{\theta - 1} + x^{\theta - \frac{1}{2}}) e^{-x} \\
+q(x) &\le (1/C)*g(x) \\
+where \ C &= \Big[ \frac{1}{2 \Gamma(\theta) + \Gamma(\theta + \frac{1}{2})} \Big] \\
+\alpha &= 1/C  \\
+\alpha &=  2 \Gamma(\theta) + \Gamma(\theta + \frac{1}{2}) \\
+\alpha g(x) &= (2 x^{\theta - 1} + x^{\theta - \frac{1}{2}}) e^{-x}
+\end{align*}
+
+Now, we design the procedure to sample from f(x) by following the rejection sampling procedure. Then, we plot the estimated density of $f(x)$. It is difficult to plot the actual density of $f(x)$ without evaluating the normalizing constant value that makes it a density. 
+
+```{r simulate_f, echo = TRUE, fig.cap = "\\label{fig:simulate_f} Estimated density of $f(x)$ density function", fig.width = 8, fig.pos = 'htb'}
+source("Simulate_Gamma_Mixture.R")
+
+simulate_f <- function(sample_size, theta) {
+  count <- 0
+  count_rejection <- 0
+  simulate_f <- numeric(0)
+  while(count < sample_size) {
+    g_sample <- simulate_g(1, theta)
+    uniform  <- runif(1,0,1)
+    q_x      <- sqrt(4 + g_sample)*((g_sample)^(theta-1))*exp(-1*g_sample)
+    alpha_g_x <- 2*((g_sample)^(theta-1))*exp(-1*g_sample) + 
+                    ((g_sample)^(theta-(1/2)))*exp(-1*g_sample)
+    ratio    <- (q_x)/(alpha_g_x)
+    if (uniform <= ratio) { 
+      simulate_f <- append(simulate_f, g_sample)
+      count <- count + 1
+    }
+    else {
+      count_rejection <- count_rejection + 1
+    }
+  }
+  acceptance_rate = count/(count + count_rejection)
+  return(simulate_f)
+}
+
+sample_size_sol <- 10000
+theta_sol <- 2
+f_sample <- simulate_f(sample_size_sol, theta_sol)
+
+plot(density(f_sample), col = "red")
+legend("topright", legend = c("Estimated Density of f(x)"), col = c("red"),
+       lty = c(1))
+```
+
+10000 sample points makes a good estimation of density curve. Based on observing the estimated density curve, we can infer that $f(x)$ has a similar curve to $g(x)$. This also implies a great acceptance probability and an efficient sampling. We evaluated the acceptance rate of the rejection sampling technique when $\theta = 2$ and using 10000 sample points, multiple times and observed that there is approximately 73% acceptance rate.
+
+\newpage
+
+# Using Beta Mixture Model in Rejection Sampling {#sec:Q3}
+
+In this question, we want to simulate and generate observations from an $f(x)$ density as given in Equation (\ref{eq:beta_f}), a complicated denstiy that looks similar to a sum of beta densities.
+
+\begin{equation}
+f(x) \propto \frac{x^{\theta - 1}}{1 + x^{2}} + \sqrt{2 + x^{2}} (1 - x)^{\beta - 1}
+\label{eq:beta_f}
+\end{equation}
+
+## Procedure 1 - Utilizing mixture of Beta distributions
+
+Because, $(1 + x^{2}) \ge 1$ is in the denominator of the first term, and $\sqrt{(2 + x^{2}} \le \sqrt{2} + x$, we can show that $q(x)$ is less than a mixture of beta distributions. Thus we have the following:
+
+\begin{align*}
+f(x) &\propto \frac{x^{\theta - 1}}{1 + x^{2}} + \sqrt{2 + x^{2}} (1 - x)^{\beta - 1} \\
+q(x) &=       \frac{x^{\theta - 1}}{1 + x^{2}} + \sqrt{2 + x^{2}} (1 - x)^{\beta - 1} \\
+q(x) &\le     x^{\theta - 1} + \sqrt{2} (1 - x)^{\beta - 1} +  (1 - x)^{(\beta + 1) - 1} \\
+\end{align*}
+
