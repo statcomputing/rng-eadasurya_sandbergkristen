@@ -257,6 +257,22 @@ $$ \alpha_{1} + \alpha_{2}  = 1  $$
 
 In order to simulate samples from $g(x)$ mixture density, we need to sample from $\Gamma(rate = 1, shape = \theta)$ and $\Gamma(rate = 1, shape = \theta + \frac{1}{2})$ with different probabilities. We also simulate 10000 from this mixutre $g(x)$ density when theta = 2.
 
+
+Pseudo Code:
+
+Set constant values: alpha_0
+
+Construct an indicator using the binomial distribution 
+
+Loop through sample size
+
+If indicator = 1, then output a simulated value from the gamma distribution with shape parameter theta, rate =1
+
+Else, output a simulated value from the gamma distribution with shape parameter theta + (1/2), rate =1
+
+
+
+
 ```{r kernel_fig, echo = TRUE, fig.cap = "\\label{fig:kernel_fig} Kernel Density Estimation and True Density of $g(x)$ density function", fig.width = 8, fig.pos = 'htb'}
 ## simulating using theta = 2 values 
 ## alpha in this code refers to probability that describes which distribution 
@@ -314,6 +330,24 @@ where \ C &= \Big[ \frac{1}{2 \Gamma(\theta) + \Gamma(\theta + \frac{1}{2})} \Bi
 Now, we design the procedure to sample from f(x) by following the rejection sampling procedure. Then, we plot the estimated density of $f(x)$. It is difficult to plot the actual density of $f(x)$ without evaluating the normalizing constant value that makes it a density. 
 
 \newpage
+
+Pseudo Code:
+
+Initialize count, count rejection to 0.
+
+While count is less than the sample size, 
+
+Call the simulate_g() function
+
+Draw a sample from the uniform distribution
+
+Find the ratio q(x)/g(x) where x is the simulated value from the g distribution
+
+If the uniform is less than the ratio, output sample
+
+Else, draw a new sample
+
+
 
 ```{r simulate_f, echo = TRUE, fig.cap = "\\label{fig:simulate_f} Estimated density of $f(x)$ density function", fig.width = 8, fig.pos = 'htb'}
 source("Simulate_Gamma_Mixture.R")
