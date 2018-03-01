@@ -398,10 +398,11 @@ source("simulate_beta_mix.R")
 
 q <- function(x) {
   return((x/(1+x^2)) + sqrt(2 + x^2)*((1-x)^3)) }
+## integrate(q,0,1) = 0.7058734
 
 plot(density(simulate_f_q3(10000, 2, 4)), col = "red")
-curve(q(x), xlim = c(0,1), add = TRUE, col = "green")
-legend("topright", legend = c("Kernel Density", "q(x) - proportional to density"), 
+curve(q(x)/0.7058734, xlim = c(0,1), add = TRUE, col = "green")
+legend("topright", legend = c("Kernel Density", "Approximate Actual density"), 
        col = c("red","green"), lty = c(1,1))
 ```
 
@@ -438,10 +439,11 @@ source("3_2_Simulate_f.R")
 
 q <- function(x) {
   return((x/(1+x^2)) + sqrt(2 + x^2)*((1-x)^3)) }
+## integrate(q,0,1) = 0.7058734
 
 plot(density(simulate_f_q3_2(10000, 2, 4)), col = "red")
-curve(q(x), xlim = c(0,1), add = TRUE, col = "green")
-legend("topright", legend = c("Kernel Density Procedure-2", "q(x) - proportional to density"), 
+curve(q(x)/0.7058734, xlim = c(0,1), add = TRUE, col = "green")
+legend("topright", legend = c("Kernel Density Procedure-2", "Approximate Actual Density"), 
        col = c("red","green"), lty = c(1,1))
 ```
 
